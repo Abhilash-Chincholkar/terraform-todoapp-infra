@@ -25,6 +25,15 @@ jobs:
           client-id: c7135aa6-5c0c-4b33-a148-10aa1572b218
           tenant-id: de80a58f-1610-4908-a1a7-862be272a38c
           subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563
+          
+        # 1. Add this step to install/setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # Specify the version of Terraform you need
+          terraform_version: 1.6.0 
+          # OR use 'latest' if you want the newest version
+          # terraform_version: latest 
             
       - name: Terraform fmt
         id: fmt
