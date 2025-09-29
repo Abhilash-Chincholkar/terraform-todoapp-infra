@@ -1,17 +1,18 @@
-name: "Dev Terraform Workflow"
+name: "Dev Terraform Workflow (OIDC)"
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main      
+  workflow_dispatch:
 
 permissions:
-  id-token: write
+  id-token: write    # required for OIDC
   contents: read
-  
+
 jobs: 
   terraform-init-plan:
     runs-on: ubuntu-latest
@@ -19,87 +20,76 @@ jobs:
       run:
         working-directory: environments/dev
 
-    steps: 
-      # 1. Checkout code
+    steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # 2. Login to Azure (OIDC-based auth)
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: c7135aa6-5c0c-4b33-a148-10aa1572b218
           tenant-id: de80a58f-1610-4908-a1a7-862be272a38c
           subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563 
-          
-      # 3. Install Terraform
+          allow-no-subscriptions: true
+          federated-token: true  # Enable OIDC
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.6.0   # or "latest"
-            
-      # 4. Check formatting
+          terraform_version: 1.6.0
+
       - name: Terraform fmt
         run: terraform fmt -check
-        
-      # 5. Init
-      - name: Terraform Init
-        run: terraform init -input=false  
 
-      # 6. Validate
+      - name: Terraform Init
+        run: terraform init -input=false
+
       - name: Terraform Validate
-        run: terraform validate -no-color      
-      
-      # 7. Plan
+        run: terraform validate -no-color
+
       - name: Terraform Plan
         run: terraform plan -no-color -input=false -out=tfplan
-        
-      # 8. Upload plan artifact (optional, good for debugging/apply job)
+
       - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: environments/dev/tfplan
 
-  terraform-apply:    
+  terraform-apply:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     needs: terraform-init-plan
-    environment: dev
+    if: github.ref == 'refs/heads/main'
     defaults:
       run:
         working-directory: environments/dev
 
     steps:
-      # 1. Checkout code
       - name: Checkout
         uses: actions/checkout@v5
-    
-      # 2. Azure Login
-      - name: Azure Login
+
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: c7135aa6-5c0c-4b33-a148-10aa1572b218
           tenant-id: de80a58f-1610-4908-a1a7-862be272a38c
           subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563 
+          allow-no-subscriptions: true
+          federated-token: true
 
-      # 3. Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.0
 
-      # 4. Init
       - name: Terraform Init
-        run: terraform init -input=false  
+        run: terraform init -input=false
 
-      # 5. Download plan artifact (optional if you want exact plan from previous job)
       - name: Download Plan
         uses: actions/download-artifact@v4
         with:
           name: tfplan
           path: environments/dev
 
-      # 6. Apply
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
