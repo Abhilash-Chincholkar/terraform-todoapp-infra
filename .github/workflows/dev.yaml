@@ -14,73 +14,92 @@ permissions:
   
 jobs: 
   terraform-init-plan:
-    runs-on: Runner
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: environments/dev
+
     steps: 
+      # 1. Checkout code
       - name: Checkout
-        uses: actions/checkout@v5.0.0
-    
+        uses: actions/checkout@v5
+
+      # 2. Login to Azure (OIDC-based auth)
       - name: Azure Login
-        uses: Azure/login@v2.3.0
+        uses: azure/login@v2
         with:
           client-id: c7135aa6-5c0c-4b33-a148-10aa1572b218
           tenant-id: de80a58f-1610-4908-a1a7-862be272a38c
-          subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563
+          subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563 
           
-        # 1. Add this step to install/setup Terraform
+      # 3. Install Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          # Specify the version of Terraform you need
-          terraform_version: 1.6.0 
-          # OR use 'latest' if you want the newest version
-          # terraform_version: latest 
+          terraform_version: 1.6.0   # or "latest"
             
+      # 4. Check formatting
       - name: Terraform fmt
-        id: fmt
         run: terraform fmt -check
-        continue-on-error: true
-        working-directory: environments/dev
         
+      # 5. Init
       - name: Terraform Init
-        id: init
         run: terraform init -input=false  
-        working-directory: environments/dev
 
+      # 6. Validate
       - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
-        working-directory: environments/dev        
+        run: terraform validate -no-color      
       
+      # 7. Plan
       - name: Terraform Plan
-        id: plan
-        run: terraform plan -no-color -input=false
-        continue-on-error: true
-        working-directory: environments/dev    
+        run: terraform plan -no-color -input=false -out=tfplan
         
+      # 8. Upload plan artifact (optional, good for debugging/apply job)
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: environments/dev/tfplan
+
   terraform-apply:    
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     needs: terraform-init-plan
     environment: dev
+    defaults:
+      run:
+        working-directory: environments/dev
+
     steps:
+      # 1. Checkout code
       - name: Checkout
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v5
     
+      # 2. Azure Login
       - name: Azure Login
-        uses: Azure/login@v2.3.0
+        uses: azure/login@v2
         with:
           client-id: c7135aa6-5c0c-4b33-a148-10aa1572b218
           tenant-id: de80a58f-1610-4908-a1a7-862be272a38c
-          subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563  
-          
-      - name: Terraform Init
-        id: init
-        run: terraform init -input=false  
-        working-directory: environments/dev
+          subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563 
 
+      # 3. Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      # 4. Init
+      - name: Terraform Init
+        run: terraform init -input=false  
+
+      # 5. Download plan artifact (optional if you want exact plan from previous job)
+      - name: Download Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: environments/dev
+
+      # 6. Apply
       - name: Terraform Apply
-        id: apply
-        run: terraform apply --auto-approve
-        continue-on-error: true
-        working-directory: environments/dev              
-          
+        run: terraform apply -auto-approve tfplan
