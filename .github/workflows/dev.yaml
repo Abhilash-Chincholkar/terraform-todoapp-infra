@@ -31,7 +31,7 @@ jobs:
           tenant-id: de80a58f-1610-4908-a1a7-862be272a38c
           subscription-id: 0f48ce1f-16d2-42ba-8b4f-0bef1a58b563 
           allow-no-subscriptions: true
-          federated-token: true  # Enable OIDC
+
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
